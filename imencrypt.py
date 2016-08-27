@@ -1,39 +1,8 @@
-'''
-Image Encryption GUI
-
-@author: Cahlen Humphreys (cahlen@gmail.com) aka phku
-Propz to Tilar and the rest of #blacksun Efnet.  Eris free for life.
-
-LICENSE:
-The MIT License (MIT)
-
-Copyright (c) 2014 Cahlen Humphreys
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-'''
 from Tkinter import *
 from tkFileDialog import *
 import tkMessageBox
 import os
-import Image 
-import PIL
+from PIL import Image
 import math
 from Crypto.Cipher import AES
 import hashlib
@@ -47,54 +16,54 @@ def encrypt(imagename,password):
     # initialize variables
     plaintext = list()
     plaintextstr = ""
-    
+
     # load the image
     im = Image.open(imagename)  # open target image
     pix = im.load()
-    
+
     #print im.size   # print size of image (width,height)
     width = im.size[0]
     height = im.size[1]
-    
+
     # break up the image into a list, each with pixel values and then append to a string
     for y in range(0,height):
         #print("Row: %d") %y  # print row number
         for x in range(0,width):
             #print pix[x,y]  # print each pixel RGB tuple
             plaintext.append(pix[x,y])
-            
-    # add 100 to each tuple value to make sure each are 3 digits long.  being able to do this is really just a PoC 
+
+    # add 100 to each tuple value to make sure each are 3 digits long.  being able to do this is really just a PoC
     # that you'll be able to use a raw application of RSA to encrypt, rather than PyCrypto if you wanted.
     for i in range(0,len(plaintext)):
         for j in range(0,3):
             plaintextstr = plaintextstr + "%d" %(int(plaintext[i][j])+100)
-    
+
     # length save for encrypted image reconstruction
     relength = len(plaintext)
-    
+
     # append dimensions of image for reconstruction after decryption
     plaintextstr += "h" + str(height) + "h" + "w" + str(width) + "w"
-    
+
     # make sure that plantextstr length is a multiple of 16 for AES.  if not, append "n".  not safe in theory
     # and i should probably replace this with an initialization vector IV = 16 * '\x00' at some point.  In practice
     # this IV buffer should be random.
     while (len(plaintextstr) % 16 != 0):
         plaintextstr = plaintextstr + "n"
-    
+
     # encrypt plaintext
     obj = AES.new(password, AES.MODE_CBC, 'This is an IV456')
     ciphertext = obj.encrypt(plaintextstr)
-    
+
     # write ciphertext to file for analysis
     cipher_name = imagename + ".crypt"
     g = open(cipher_name, 'w')
     g.write(ciphertext)
-    
+
     # -----------------
     # construct encrypted image (not currently using since Tkinter isn't very nice)
     # -----------------
     def construct_enc_image():
-        # hexlify the ciphertext    
+        # hexlify the ciphertext
         asciicipher = binascii.hexlify(ciphertext)
 
         # replace function
@@ -118,7 +87,7 @@ def encrypt(imagename,password):
             while (len(encimageone) % 3 != 0):
                 encimageone.append("101")
 
-        encimagetwo=[(int(encimageone[int(i)]),int(encimageone[int(i+1)]),int(encimageone[int(i+2)])) for i in range(0, len(encimageone), step)]    
+        encimagetwo=[(int(encimageone[int(i)]),int(encimageone[int(i+1)]),int(encimageone[int(i+2)])) for i in range(0, len(encimageone), step)]
 
         # make sizes of images equal
         while (int(relength) != len(encimagetwo)):
@@ -127,32 +96,32 @@ def encrypt(imagename,password):
         # encrypted image
         encim = Image.new("RGB", (int(width),int(height)))
         encim.putdata(encimagetwo)
-   
+
         #encim.show()
         # alert success and path to image
         enc_success(cipher_name)
-        
+
     construct_enc_image()
-    
+
 # decryption method
 # -----------------
 def decrypt(ciphername,password):
-    
+
     # reach ciphertext into memory
     cipher = open(ciphername,'r')
     ciphertext = cipher.read()
-    
+
     # decrypt ciphertext with password
     obj2 = AES.new(password, AES.MODE_CBC, 'This is an IV456')
     decrypted = obj2.decrypt(ciphertext)
-    
+
     # parse the decrypted text back into integer string
     decrypted = decrypted.replace("n","")
-    
+
     # extract dimensions of images
     newwidth = decrypted.split("w")[1]
     newheight = decrypted.split("h")[1]
-    
+
     # replace height and width with emptyspace in decrypted plaintext
     heightr = "h" + str(newheight) + "h"
     widthr = "w" + str(newwidth) + "w"
@@ -162,13 +131,13 @@ def decrypt(ciphername,password):
     # reconstruct the list of RGB tuples from the decrypted plaintext
     step = 3
     finaltextone=[decrypted[i:i+step] for i in range(0, len(decrypted), step)]
-    finaltexttwo=[(int(finaltextone[int(i)])-100,int(finaltextone[int(i+1)])-100,int(finaltextone[int(i+2)])-100) for i in range(0, len(finaltextone), step)]    
+    finaltexttwo=[(int(finaltextone[int(i)])-100,int(finaltextone[int(i+1)])-100,int(finaltextone[int(i+2)])-100) for i in range(0, len(finaltextone), step)]
 
     # reconstruct image from list of pixel RGB tuples
     newim = Image.new("RGB", (int(newwidth), int(newheight)))
     newim.putdata(finaltexttwo)
     newim.show()
-    
+
 # ---------------------
 # GUI stuff starts here
 # ---------------------
@@ -176,15 +145,15 @@ def decrypt(ciphername,password):
 # empty password alert
 def pass_alert():
    tkMessageBox.showinfo("Password Alert","Please enter a password.")
-   
+
 def enc_success(imagename):
-   tkMessageBox.showinfo("Success","Encrypted Image: " + imagename) 
-   
+   tkMessageBox.showinfo("Success","Encrypted Image: " + imagename)
+
 # image encrypt button event
 def image_open():
     # useless for now, may need later
     global file_path_e
-    
+
     # check to see if password entry is null.  if yes, alert
     enc_pass = passg.get()
     if enc_pass == "":
@@ -195,17 +164,17 @@ def image_open():
         file_path_e = os.path.dirname(filename)
         # encrypt the image
         encrypt(filename,password)
-    
+
 # image decrypt button event
 def cipher_open():
     # useless for now, may need later
     global file_path_d
-        
+
     # check to see if password entry is null.  if yes, alert
     dec_pass = passg.get()
     if dec_pass == "":
         pass_alert()
-    else:    
+    else:
         password = hashlib.sha256(dec_pass).digest()
         filename = askopenfilename()
         file_path_d = os.path.dirname(filename)
@@ -228,7 +197,7 @@ class App:
     # draw canvas
     canvas_width = 200
     canvas_height = 50
-    w = Canvas(master, 
+    w = Canvas(master,
            width=canvas_width,
            height=canvas_height)
 
@@ -236,7 +205,7 @@ class App:
     msgtitle.pack()
     msgauthor.pack()
     w.pack()
-    
+
     # password field here above buttons
     passlabel = Label(master, text="Enter Encrypt/Decrypt Password:")
     passlabel.pack()
@@ -244,8 +213,8 @@ class App:
     passg.pack()
 
     # add both encrypt/decrypt buttons here which trigger file browsers
-    self.encrypt = Button(master, 
-                         text="Encrypt", fg="black", 
+    self.encrypt = Button(master,
+                         text="Encrypt", fg="black",
                          command=image_open, width=25,height=5)
     self.encrypt.pack(side=LEFT)
     self.decrypt = Button(master,
@@ -259,5 +228,3 @@ root = Tk()
 root.wm_title("Image Encryption")
 app = App(root)
 root.mainloop()
-
-
